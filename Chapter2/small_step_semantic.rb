@@ -181,6 +181,64 @@ class Machine<Struct.new(:expression,:environment)
   end
 end
 
+class DoNothing
+  def to_s
+    'do-nothing'
+  end
+  def inspect
+    "<<#{self}>>"
+  end
+  def ==(other_statement)
+    other_statement.instance_of?(DoNothing)
+  end
+  def reducible?
+    false
+  end
+end
+
+class Assign <Struct.new(:name,:expression)
+  def to_s
+    "#{name}=#{expression}"
+  end
+  def inspect
+    "<<#{self}>>"
+  end
+  def reducible?
+    true
+  end
+  def reduce(environment)
+    if expression.reducible?
+      [Assign.new(name,expression.reduce(environment)),environment]
+    else
+      [DoNothing.new,environment.merge({name=>expression})]
+    end
+  end
+end
+
+class If<Struct.new(:condition,:consequence,:alternative)
+  def to_s
+    "if (#{condition}) { #{consequence} } else { #{alternative} }"
+  end
+  def inspect
+    "<<#{self}>>"
+  end
+  def reducible?
+    true
+  end
+  def reduce(environment)
+    if condition.reducible?
+      [If.new(condition.reduce(environment),consequence,alternative),environment]
+    else
+      case condition
+        when Boolean.new(true)
+          [consequence,environment]
+        when Boolean.new(false)
+          [alternative,environment]
+      end
+    end
+  end
+end
+
 res= Add.new(Multiply.new(Number.new(2), Number.new(3)), Multiply.new(Number.new(2), Number.new(3)))
 
 puts Machine.new(res).run
@@ -190,3 +248,24 @@ puts Machine.new(expression).run
 
 expressionWithVariables = LessThan.new(Variable.new(:x),Variable.new(:y))
 puts Machine.new(expressionWithVariables,{x:Number.new(7),y:Number.new(4)}).run
+
+
+Object.send(:remove_const, :Machine)
+class Machine<Struct.new(:statement,:environment)
+  def step
+    self.statement,self.environment=statement.reduce(environment)
+  end
+  def run
+    while statement.reducible?
+      puts"#{statement},#{environment}"
+      step
+    end
+    puts"#{statement},#{environment}"
+  end
+
+end
+assignStatement = Assign.new(:x,Add.new(Variable.new(:x),Number.new(3)))
+env={x:Number.new(5)}
+Machine.new(assignStatement,env).run
+
+Machine.new(If.new(LessThan.new(Number.new(2),Number.new(3)),Assign.new(Variable.new(:x),Number.new(2)),Assign.new(Variable.new(:x),Number.new(3))),{x:Number.new(1)}).run
